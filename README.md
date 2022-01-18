@@ -1,2 +1,2 @@
 # tidytuesday
-code for tidytuesdays!
+A place to store code for tidytuesdays!
