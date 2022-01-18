@@ -17,24 +17,139 @@ chocolate <- read_csv('data/chocolate.csv',
 chocolate %>% head()
 ```
 
+
+### Data Dictionary
+
+# `chocolate.csv`
+
+|variable                         |class     |description |
+|:--------------------------------|:---------|:-----------|
+|ref                              |integer   |Reference ID, The highest REF numbers were the last entries made. |
+|company_manufacturer             |character | Manufacturer name |
+|company_location                 |character | Manufacturer region |
+|review_date                      |integer   | Review date (year) |
+|country_of_bean_origin           |character | Country of origin |
+|specific_bean_origin_or_bar_name |character | Specific bean or bar name|
+|cocoa_percent                    |character | Cocoa percent (% chocolate) |
+|ingredients                      |character | Ingredients, ("#" = represents the number of ingredients in the chocolate; B = Beans, S = Sugar, S* = Sweetener other than white cane or beet sugar, C = Cocoa Butter, V = Vanilla, L = Lecithin, Sa = Salt) |
+|most_memorable_characteristics   |character | Most Memorable Characteristics column is a summary review of the most memorable characteristics of that bar. Terms generally relate to anything from texture, flavor, overall opinion, etc. separated by ','|
+|rating                           |double    | rating between 1-5 |
+
 ```{r}
-chocolate %>% 
+chocolate <- chocolate %>% 
   separate(ingredients, into=c('n_ingredients', 'ingredients'),
-           sep=1)
+           sep=1) %>%
+  mutate(cocoa_val = str_sub(cocoa_percent, 1,
+                                     nchar(cocoa_percent)-1)) %>%
+  mutate_at(vars(cocoa_val), as.double)
 ```
 
 
 ```{r}
-chocolate %>% count(company_manufacturer, company_location)
+chocolate %>% count(company_location) %>% arrange(-n)
+```
+```{r}
+common_producers <- chocolate %>% 
+  count(company_location) %>% 
+  filter(n >= 30) %>%
+  select(company_location) %>%
+  pull()
 ```
 
 
 ```{r}
-ggplot(chocolate, aes(review_date, rating, color=company_location)) +
-  geom_point(alpha=.2) +
-  facet_wrap(~company_manufacturer)
+chocolate <- chocolate %>%
+  mutate(region = case_when(
+    company_location %in% c('Amsterdam',  'Czech Republic', 'Finland','Hungary',
+                            'Iceland', 'Ireland', 'Lithuania', 'Netherlands', 
+                            'Norway', 'Poland', 'Portugal',
+                            'Scotland', 'Sweden', 'Wales') ~ 'Europe',
+    company_location %in% c('Argentina', 'Bolivia', 'Brazil', 'Chile',
+                            'Colombia', 'Costa Rica', 'Dominican Republic',
+                            'El Salvador', 'Guatemala', 'Honduras',
+                            'Nicaragua', 'Peru', 'Suriname') ~ 'South America',
+    company_location %in% c('Fiji', 'New Zealand', 'Philippines', 'Vanuatu') ~ 'Oceania',
+    company_location %in% c('Ghana', 'Madagascar', 'Malaysia', 'Sao Tome', 
+                            'Sao Tome & Principe', 'South Africa') ~ 'Africa',
+    company_location %in% c('Israel', "U.A.E.") ~ 'Middle East',
+    company_location %in% c('Russia', 'Vietnam', 'India', 'Singapore',
+                            'South Korea', 'Taiwan', 'Thailand') ~ 'Asia',
+    company_location %in% c('Grenada', 'Puerto Rico', 'Martinique',
+                            'St. Lucia', 'St.Vincent-Grenadines' ) ~ 'Caribbean',
+    TRUE ~ company_location
+  ))
+```
+
+```{r}
+chocolate %>%
+  select(cocoa_val, rating, n_ingredients, review_date) %>%
+  GGally::ggpairs()
+```
+```{r}
+chocolate <- chocolate %>%
+  mutate(val_bin = case_when(
+    cocoa_val < 68 ~ 'low',
+    cocoa_val <= 72 ~ 'medium',
+    cocoa_val > 72 ~ 'high'
+  )) %>%
+  mutate(val_bin = factor(val_bin,
+                          levels=c('low', 'medium', 'high')))
 ```
 
 
+```{r}
+chocolate %>%
+  select(review_date, rating, n_ingredients, cocoa_val, val_bin) %>%
+  drop_na() %>%
+ggplot(aes(cocoa_val, rating)) +
+  geom_hex(binwidth = c(5,.25)) +
+  facet_wrap(~n_ingredients)
+```
+
+
+```{r}
+chocolate %>%
+  mutate(region = case_when(
+    company_location %in% c('Amsterdam',  'Czech Republic', 'Finland','Hungary',
+                            'Iceland', 'Ireland', 'Lithuania', 'Netherlands', 
+                            'Norway', 'Poland', 'Portugal',
+                            'Scotland', 'Sweden', 'Wales') ~ 'Europe',
+    company_location %in% c('Argentina', 'Bolivia', 'Brazil', 'Chile',
+                            'Colombia', 'Costa Rica', 'Dominican Republic',
+                            'El Salvador', 'Guatemala', 'Honduras',
+                            'Nicaragua', 'Peru', 'Suriname') ~ 'South America',
+    company_location %in% c('Fiji', 'Vanuatu') ~ 'Oceania',
+    company_location %in% c('Sao Tome', 'Sao Tome & Principe') ~ 'Africa',
+    company_location %in% c('Russia', 'Vietnam') ~ 'Asia',
+    company_location %in% c('Grenada', 'St. Lucia', 'St.Vincent-Grenadines' ) ~ 'Caribbean',
+    TRUE ~ NA_character_
+  )) %>%
+  filter(is.na(region)) %>%
+  count(company_location)
+```
+
+```{r}
+chocolate <- chocolate %>% 
+  mutate(Vanilla = case_when(
+    str_detect(ingredients, "V") ~ 1,
+    TRUE ~ 0
+  )) %>% 
+  mutate(Salt = case_when(
+    str_detect(ingredients, 'Sa') ~ 1,
+    TRUE ~ 0
+  )) %>%
+  mutate(Sugar = case_when(
+    str_detect(ingredients, 'S\\*') ~ 2,
+    str_detect(ingredients, 'S') ~ 1,
+    TRUE ~ 0
+  )) 
+chocolate %>% count(Sugar, Vanilla, Salt)
+```
+
+```{r}
+chocolate %>%
+  ggplot(aes(as.factor(Sugar), rating)) +
+  geom_violin()
+```
 
 
