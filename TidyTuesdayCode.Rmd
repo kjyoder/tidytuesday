@@ -1,0 +1,40 @@
+---
+title: "Tidy Tuesday 2022"
+output: html_notebook
+---
+
+# 2022-01-18
+```{r}
+require(tidyverse)
+# tuesdata <- tidytuesdayR::tt_load('2022-01-18')
+# chocolate <- tuesdata$chocolate
+# chocolate %>% write_csv('data/chocolate.csv')
+chocolate <- read_csv('data/chocolate.csv',
+                      col_types = cols(.default=col_character(),
+                                       ref=col_number(),
+                                       review_date=col_number(),
+                                       rating=col_number()))
+chocolate %>% head()
+```
+
+```{r}
+chocolate %>% 
+  separate(ingredients, into=c('n_ingredients', 'ingredients'),
+           sep=1)
+```
+
+
+```{r}
+chocolate %>% count(company_manufacturer, company_location)
+```
+
+
+```{r}
+ggplot(chocolate, aes(review_date, rating, color=company_location)) +
+  geom_point(alpha=.2) +
+  facet_wrap(~company_manufacturer)
+```
+
+
+
+
