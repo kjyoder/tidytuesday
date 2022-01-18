@@ -38,7 +38,9 @@ chocolate %>% head()
 ```{r}
 chocolate <- chocolate %>% 
   separate(ingredients, into=c('n_ingredients', 'ingredients'),
-           sep=1) %>%
+           sep='-') %>%
+  mutate(n_ingredients = as.numeric(n_ingredients)) %>%
+  mutate(ingredients = str_trim(ingredients)) %>%
   mutate(cocoa_val = str_sub(cocoa_percent, 1,
                                      nchar(cocoa_percent)-1)) %>%
   mutate_at(vars(cocoa_val), as.double)
@@ -46,6 +48,9 @@ chocolate <- chocolate %>%
 
 
 ```{r}
+chocolate %>% 
+  count(company_location) %>%
+  ggplot(aes(n)) + geom_histogram(bins=30)
 chocolate %>% count(company_location) %>% arrange(-n)
 ```
 ```{r}
@@ -54,6 +59,14 @@ common_producers <- chocolate %>%
   filter(n >= 30) %>%
   select(company_location) %>%
   pull()
+```
+
+
+```{r}
+chocolate %>% 
+  count(country_of_bean_origin) %>%
+  ggplot(aes(n)) + geom_histogram(bins=30)
+chocolate %>% count(country_of_bean_origin) %>% arrange(-n)
 ```
 
 
@@ -139,8 +152,9 @@ chocolate <- chocolate %>%
     TRUE ~ 0
   )) %>%
   mutate(Sugar = case_when(
+    is.na(ingredients) ~ NA_real_,
     str_detect(ingredients, 'S\\*') ~ 2,
-    str_detect(ingredients, 'S') ~ 1,
+    str_detect(ingredients, '[S,|S\\$]') ~ 1,
     TRUE ~ 0
   )) 
 chocolate %>% count(Sugar, Vanilla, Salt)
@@ -148,8 +162,10 @@ chocolate %>% count(Sugar, Vanilla, Salt)
 
 ```{r}
 chocolate %>%
-  ggplot(aes(as.factor(Sugar), rating)) +
-  geom_violin()
+  select(rating, Sugar) %>%
+  drop_na() %>% 
+  ggplot(aes(rating, as.factor(Sugar), fill=as.factor(Sugar))) +
+  ggridges::geom_density_ridges()
 ```
 
 
