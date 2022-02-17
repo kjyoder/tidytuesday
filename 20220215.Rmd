@@ -1,0 +1,263 @@
+---
+title: "TidyTuesday 2022-02-15"
+output: html_notebook
+---
+
+```{r}
+require(tidyverse)
+require(tidytuesdayR)
+require(ggpubr)
+tuesdata <- tidytuesdayR::tt_load('2022-02-15')
+```
+
+
+```{r}
+d <- read_csv('../dubois-data-portraits/challenge/2022/challenge04/data.csv',
+              col_types = cols(.default = col_double()))
+d %>% glimpse()
+```
+
+```{r}
+d <- d %>%
+  mutate(val = `Property Valuation`) %>%
+  mutate(KKK = case_when(
+    Year < 1875 ~ val,
+    Year > 1898 ~ val,
+    TRUE ~ NA_real_
+  )) %>%
+  mutate(postKKK = case_when(
+    Year >= 1874 & Year < 1899~ val,
+    TRUE ~ NA_real_
+  )) %>%
+  mutate(KKKmark = case_when(
+    is.na(KKK) ~ "",
+    TRUE ~ "?"
+  ))
+```
+
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color='white') +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(y=KKK, label=KKKmark), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank()) +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.8*1e6), expand=FALSE) +
+  theme(axis.ticks.y =element_blank()) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.8*1e6, 
+           fill='white')
+
+ggsave('20220215_01.png', width=4, height=5, unit='in')
+```
+
+
+Not bad, not let's tweak the rect a little and make sure we have the title
+
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color='white') +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(y=KKK, label=KKKmark), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.8*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        aspect.ratio = 1) +
+  annotate('rect', xmin=1865, xmax=1869.7,
+           ymin=0, ymax=4.8*1e6, 
+           fill='white')
+
+ggsave('20220215_02.png', width=5.1, height=5.5, unit='in')
+```
+
+red lines
+
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color= "#EAE1D6") +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(y=KKK, label=KKKmark), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.9*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        aspect.ratio = 1,
+        panel.grid = element_line(color = "#E6A09E"),
+        panel.grid.major = element_line(size=.25),
+        panel.background = element_rect(fill =  "#EAE1D6"),
+        plot.background = element_rect(fill =  "#EAE1D6", color =  "#EAE1D6")) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.9*1e6, 
+           fill="#EAE1D6") +
+  geom_segment(x=1865.5, xend=1870, y=1*1e6, yend=1*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=2*1e6, yend=2*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=3*1e6, yend=3*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=4*1e6, yend=4*1e6, color="#E6A09E", size=.25) +
+  annotate('rect', xmin=1861, xmax=1865, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('rect', xmin=1870, xmax=1900, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25)
+
+ggsave('20220215_03.png', width=5.1, height=5.5, unit='in')
+```
+
+```{r}
+d <- d %>%
+  mutate(Year2 = lead(Year)) %>%
+  mutate(val2 = lead(val)) %>%
+  mutate(MarkX = Year + (Year2 - Year)/2) %>%
+  mutate(MarkY = val + (val2 - val)/2) %>%
+  mutate(MarkLabel = case_when(
+    is.na(MarkX) ~ "",
+    TRUE ~ "?"
+  ))
+```
+
+
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color= "#EAE1D6") +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(x=MarkX, y=MarkY, label=MarkLabel), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.9*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        aspect.ratio = 1,
+        panel.grid = element_line(color = "#E6A09E"),
+        panel.grid.major = element_line(size=.25),
+        panel.background = element_rect(fill =  "#EAE1D6"),
+        plot.background = element_rect(fill =  "#EAE1D6", color =  "#EAE1D6")) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.9*1e6, 
+           fill="#EAE1D6") +
+  geom_segment(x=1865.5, xend=1870, y=1*1e6, yend=1*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=2*1e6, yend=2*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=3*1e6, yend=3*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=4*1e6, yend=4*1e6, color="#E6A09E", size=.25) +
+  annotate('rect', xmin=1861, xmax=1865, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('rect', xmin=1870, xmax=1900, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25)
+
+ggsave('20220215_04.png', width=5.1, height=5.5, unit='in')
+```
+
+
+
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
+
+
+```{r}
+d <- d %>%
+  mutate(val = `Property Valuation`) %>%
+  mutate(KKK = case_when(
+    Year < 1875 ~ val,
+    Year > 1898 ~ val,
+    TRUE ~ NA_real_
+  )) %>%
+  mutate(postKKK = case_when(
+    Year >= 1874 & Year < 1899~ val,
+    TRUE ~ NA_real_
+  )) %>%
+  mutate(KKKmark = case_when(
+    is.na(KKK) ~ "",
+    TRUE ~ "?"
+  ))
+```
+
+
+
+
+
+```{r}
+gline <- d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color='white') +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(y=KKK, label=KKKmark), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5)) +
+  labs(x = element_blank(), y = element_blank()) +
+  coord_cartesian(xlim=c(1870, 1900), ylim=c(0, 4.8*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.text.y=element_blank(),
+        axis.ticks.y =element_blank(),
+        aspect.ratio = 1,
+        plot.margin=unit(c(1,1,1,.1), "cm"))
+
+gy <- d_y %>%
+  ggplot(aes(x, y)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5)) +
+  coord_cartesian(xlim=c(1, 4), ylim=c(0, 4.8*1e6), expand=FALSE) +
+  labs(x = element_blank(), y=element_blank()) +
+  theme(panel.grid.minor.x = element_blank(),
+        panel.grid.major.x = element_blank(),
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        aspect.ratio=1,
+        plot.margin=unit(c(1,1,1,1), "cm"))
+
+p <- ggarrange(gy, gline, widths = c(.3, 2), align = 'hv', nrow=1)
+
+annotate_figure(p, top = text_grob("VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.", 
+               face = "bold", size = 14))
+
+ggsave('Fig2.png', width=6.5, height=10, units='in')
+```
+
+
