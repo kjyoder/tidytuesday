@@ -1,0 +1,423 @@
+---
+title: "TidyTuesday 2022-03-01"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+require(usmap)
+require(tidyverse)
+tuesdata <- tidytuesdayR::tt_load('2022-03-01')
+stations <- tuesdata$stations
+```
+
+```{r}
+stations %>%
+  glimpse()
+```
+
+```{r}
+pct_e <- stations %>%
+  mutate(Electric = case_when(
+    is.na(FUEL_TYPE_CODE) ~ NA_real_,
+    FUEL_TYPE_CODE == 'ELEC' ~ 1,
+    TRUE ~ 0
+  )) %>%
+  group_by(STATE) %>%
+  summarize(Percent_E = mean(Electric),
+            n = n())
+pct_e
+```
+
+```{r}
+statepop %>%
+  left_join(pct_e, b=c("abbr"="STATE")) %>%
+  filter(! "abbr" %in% c("AK", "HI")) %>%
+  plot_usmap(regions='states', exclude = c('HI', 'AK'), data = ., values = "Percent_E") +
+  scale_fill_viridis_c() +
+  theme(legend.position = "right") +
+  ggtitle('Percentage of alternate fueling stations that are electric')
+```
+
+```{r}
+state_pct <- statepop %>%
+  left_join(pct_e, b=c("abbr"="STATE")) %>% 
+  filter(! "abbr" %in% c("AK", "HI")) %>%
+  mutate(Large = case_when(
+    pop_2015
+  ))
+
+
+  ggplot(aes(pop_2015, Percent_E)) + 
+  geom_point() + 
+  geom_smooth(method="lm") + 
+  theme_classic() +
+  annotate('text', x=. %>% filter(pop_2015>2e7) %>% pull(pop_2015),
+           y = . %>% filter(pop_2015>2e7) %>% pull(Percent_E),
+           label = . %>% filter(pop_2015>2e7) %>% pull(abbr))
+```
+
+
+```{r}
+d <- stations %>%
+  mutate(Region = case_when(
+    STATE %in% c('ME', 'MA', 'RI', 'VT', 'CT', 'NH') ~ 'New England',
+    STATE %in% c('NY', 'NJ', 'PA', 'DC') ~ 'Mid-Atlantic',
+    STATE %in% c('WV', 'VA', 'KY', 'DE', 'MD', 'NC', 'SC', 'GA', 'FL', 'TN', 'AR', 'MS', 'LA', 'AL') ~ 'South',
+    STATE %in% c('IN', 'IL', 'OH', 'MI', 'MN', 'WI', 'ND', 'SD', 'IA', 'NE', 'MO', 'KS') ~ 'Midwest',
+    STATE %in% c('TX', 'AZ', 'NM', 'OK') ~ 'Southwest',
+    STATE %in% c('NV', 'CO', 'MT', 'ID', 'WY', 'UT') ~ 'Rocky Mountains',
+    STATE %in% c('CA', 'WA', 'OR') ~ 'Pacific Northwest',
+    TRUE ~ NA_character_
+  )) %>%
+  select(Region, FUEL_TYPE_CODE) %>%
+  drop_na()
+```
+
+```{r}
+d %>%
+  mutate(Electric = case_when(
+    FUEL_TYPE_CODE == 'ELEC' ~ 'Electric',
+    TRUE ~ 'Other'
+  )) %>%
+  filter(Electric == 'Other') %>% 
+  ggplot(aes(FUEL_TYPE_CODE)) +
+  geom_bar(aes(fill=FUEL_TYPE_CODE)) +
+  theme_classic() +
+  facet_wrap(~Region) +
+  viridis::
+```
+
+
+```{r}
+stations %>% 
+  filter(FUEL_TYPE_CODE != 'ELEC') %>%
+  ggplot(aes(FUEL_TYPE_CODE)) +
+  geom_bar() +
+  facet_wrap(~STATE, nrow=8)
+```
+
+
+
+```{r}
+d <- read_csv('../dubois-data-portraits/challenge/2022/challenge04/data.csv',
+              col_types = cols(.default = col_double()))
+d %>% glimpse()
+```
+
+For this Tidy Tuesday challenge, the goal is to re-create W.E.B Du Bois' "Valuation of Town and City Property Owned by Georgia Negroes" (plate 21) from the 1900 Paris Exposition using the tidyverse.
+
+The first thing I did was add some columns to plot the "KKK" question marks:
+
+```{r}
+d <- d %>%
+  mutate(val = `Property Valuation`) %>%
+  mutate(KKK = case_when(
+    Year < 1875 ~ val,
+    Year > 1898 ~ val,
+    TRUE ~ NA_real_
+  )) %>%
+  mutate(postKKK = case_when(
+    Year >= 1874 & Year < 1899~ val,
+    TRUE ~ NA_real_
+  )) %>%
+  mutate(KKKmark = case_when(
+    is.na(KKK) ~ "",
+    TRUE ~ "?"
+  ))
+```
+
+Now, let's try to get the basic shape. First, we'll plot lines - solid black for the main values, but white for the first/last. We'll also expand the x axis to the left so that we can build the separated y-axis. To fully separate it, I just drew a rectangle on top of the section I didn't want to show.
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color='white') +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(y=KKK, label=KKKmark), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank()) +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.8*1e6), expand=FALSE) +
+  theme(axis.ticks.y =element_blank()) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.8*1e6, 
+           fill='white')
+
+ggsave('20220215_01.png', width=4, height=5, unit='in')
+```
+
+Not bad, but now I'll tweak that rectangle a little to clean up the edges of the plot. I'll also add the title and force the grid to be square by setting aspect.ratio=1 within theme().
+
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color='white') +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(y=KKK, label=KKKmark), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.8*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        aspect.ratio = 1) +
+  annotate('rect', xmin=1865, xmax=1869.7,
+           ymin=0, ymax=4.8*1e6, 
+           fill='white')
+
+ggsave('20220215_02.png', width=5.1, height=5.5, unit='in')
+```
+
+This is looking good! The next step is to adopt the color palette of Du Bois' and add the horizontal major y-axis lines at every million dollars.
+
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color= "#EAE1D6") +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(y=KKK, label=KKKmark), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.9*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        aspect.ratio = 1,
+        panel.grid = element_line(color = "#E6A09E"),
+        panel.grid.major = element_line(size=.25),
+        panel.background = element_rect(fill =  "#EAE1D6"),
+        plot.background = element_rect(fill =  "#EAE1D6", color =  "#EAE1D6")) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.9*1e6, 
+           fill="#EAE1D6") +
+  geom_segment(x=1865.5, xend=1870, y=1*1e6, yend=1*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=2*1e6, yend=2*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=3*1e6, yend=3*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=4*1e6, yend=4*1e6, color="#E6A09E", size=.25) +
+  annotate('rect', xmin=1861, xmax=1865, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('rect', xmin=1870, xmax=1900, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25)
+
+ggsave('20220215_03.png', width=5.1, height=5.5, unit='in')
+```
+
+The question marks still don't look right. I realized that Du Bois plotted them at the midway point between the yearly data - to replicate that, I just need to find the midpoint of each line segment.
+
+```{r}
+d <- d %>%
+  mutate(Year2 = lead(Year)) %>%
+  mutate(val2 = lead(val)) %>%
+  mutate(MarkX = Year + (Year2 - Year)/2) %>%
+  mutate(MarkY = val + (val2 - val)/2) %>%
+  mutate(MarkLabel = case_when(
+    is.na(MarkX) ~ "",
+    TRUE ~ "?"
+  ))
+```
+
+Now when I plot the question marks they show up in the right place.
+
+```{r}
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color= "#EAE1D6") +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(x=MarkX, y=MarkY, label=MarkLabel), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.9*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        aspect.ratio = 1,
+        panel.grid = element_line(color = "#E6A09E"),
+        panel.grid.major = element_line(size=.25),
+        panel.background = element_rect(fill =  "#EAE1D6"),
+        plot.background = element_rect(fill =  "#EAE1D6", color =  "#EAE1D6")) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.9*1e6, 
+           fill="#EAE1D6") +
+  geom_segment(x=1865.5, xend=1870, y=1*1e6, yend=1*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=2*1e6, yend=2*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=3*1e6, yend=3*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=4*1e6, yend=4*1e6, color="#E6A09E", size=.25) +
+  annotate('rect', xmin=1861, xmax=1865, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('rect', xmin=1870, xmax=1900, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25)
+
+ggsave('20220215_04.png', width=5.1, height=5.5, unit='in')
+```
+
+This is getting close! Now to place the text notations, including the dollar signs on the separated y-axis.
+
+```{r}
+
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color= "#EAE1D6") +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(x=MarkX, y=MarkY, label=MarkLabel), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.9*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        aspect.ratio = 1,
+        panel.grid = element_line(color = "#E6A09E"),
+        panel.grid.major = element_line(size=.25),
+        panel.background = element_rect(fill =  "#EAE1D6"),
+        plot.background = element_rect(fill =  "#EAE1D6", color =  "#EAE1D6")) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.9*1e6, 
+           fill="#EAE1D6") +
+  geom_segment(x=1865.5, xend=1870, y=1*1e6, yend=1*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=2*1e6, yend=2*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=3*1e6, yend=3*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=4*1e6, yend=4*1e6, color="#E6A09E", size=.25) +
+  annotate('rect', xmin=1861, xmax=1865, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('rect', xmin=1870, xmax=1900, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('text', x = 1872, y=400000, label="KU-KLUXISM", size=2, angle=90) +
+  annotate('text', x = 1876, y=2400000, label="POLITICAL", size=2) +
+  annotate('text', x = 1877, y=2300000, label="UNREST", size=2) +
+  annotate('text', x = 1891, y=1500000, label="LYNCHING", size=2) +
+  annotate('text', x = 1888, y=400000, label="FINANCIAL PANIC", size=2, angle=90) +
+  annotate('text', x = 1895, y=2400000, label="DISENFRANCHISMENT\nAND\nPROSCRIPTIVE\nLAWS", size=2) +
+  annotate('text', x = 1880, y=4200000, label="RISE OF", size=2) +
+  annotate('text', x = 1882, y=4100000, label="THE NEW", size=2) +
+  annotate('text', x = 1884, y=4000000, label="INDUSTRIALISM", size=2) +
+  annotate('text', x = rep(1863, 10), y=c(.4, .6, 1.4, 1.6, 2.4, 2.6, 3.4, 3.6, 4.4, 4.6)*1e6, label="$", size=2) +
+  annotate('text', x = 1863, y=4.85*1e6, label='DOLLARS', size=2)
+
+
+ggsave('20220215_05.png', width=5.1, height=5.5, unit='in')
+```
+
+
+The final tweak is to add rectangles behind the text labels to cover up the red gridlines.
+
+```{r}
+
+d %>%
+  ggplot(aes(Year)) + 
+  geom_line(aes(y=val), size=2.5) +
+  geom_line(aes(y=KKK), size=2, color= "#EAE1D6") +
+  geom_line(aes(y=postKKK), size=2) +
+  geom_text(aes(x=MarkX, y=MarkY, label=MarkLabel), size=1.5) +
+  scale_x_continuous(breaks = seq(min(d$Year), max(d$Year), 5),
+                     minor_breaks = seq(min(d$Year), max(d$Year), 1)) +
+  scale_y_continuous(minor_breaks = seq(0, 4.8*1e6, 1e5),
+                     breaks = c(1e6, 2*1e6, 3*1e6, 4*1e6),
+                     labels = c("1,000,000", "2,000,000",
+                                "3,000,000", "4,000,000")) +
+  labs(x = element_blank(), y = element_blank(),
+       title="VALUATION OF TOWN AND CITY PROPERTY OWNED\nBY GEORGIA NEGROES.") +
+  coord_cartesian(xlim=c(1861, 1900), ylim=c(0, 4.9*1e6), expand=FALSE) +
+  theme(plot.title = element_text(hjust = 0.5, face='bold'),
+        axis.ticks.y = element_blank(),
+        axis.text.y = element_text(margin=margin(l=10, r=-36),
+                                   size=7),
+        axis.text.x = element_text(size=8, color="#131211"),
+        aspect.ratio = 1,
+        panel.grid = element_line(color = "#E6A09E"),
+        panel.grid.major = element_line(size=.25),
+        panel.background = element_rect(fill =  "#EAE1D6"),
+        plot.background = element_rect(fill =  "#EAE1D6", color =  "#EAE1D6")) +
+  annotate('rect', xmin=1865, xmax=1870,
+           ymin=0, ymax=4.9*1e6, 
+           fill="#EAE1D6") +
+  geom_segment(x=1865.5, xend=1870, y=1*1e6, yend=1*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=2*1e6, yend=2*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=3*1e6, yend=3*1e6, color="#E6A09E", size=.25) +
+  geom_segment(x=1865.5, xend=1870, y=4*1e6, yend=4*1e6, color="#E6A09E", size=.25) +
+  annotate('rect', xmin=1861, xmax=1865, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('rect', xmin=1870, xmax=1900, ymin=0, ymax=4.9*1e6,
+           color="#131211", fill = alpha('gray', 0), size=.25) +
+  annotate('rect', xmin=rep(1861.1, 4), xmax=rep(1864.9, 4), 
+           ymin=c(.93, 1.93, 2.93, 3.93)*1e6, 
+           ymax=c(1.08, 2.08, 3.08, 4.08)*1e6,
+           fill = "#EAE1D6", size=.25) +
+  annotate('rect', xmin=1871.5, xmax=1872.5, ymin=.15*1e6, ymax=.65*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1872, y=400000, label="KU-KLUXISM", size=2, angle=90) +
+  annotate('rect', xmin=1874, xmax=1877.75, ymin=2.35*1e6, ymax=2.45*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1876, y=2400000, label="POLITICAL", size=2) +
+  annotate('rect', xmin=1875.5, xmax=1878.5, ymin=2.25*1e6, ymax=2.35*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1877, y=2300000, label="UNREST", size=2) +
+  annotate('rect', xmin=1890.1, xmax=1894.9, ymin=1.41*1e6, ymax=1.49*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1891, y=1500000, label="LYNCHING", size=2, hjust=0, vjust=1.1) +
+  annotate('rect', xmin=1893.5, xmax=1894.5, ymin=.05*1e6, ymax=.75*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1894, y=400000, label="FINANCIAL PANIC", size=2, angle=90) +
+  annotate('rect', 
+           xmin=c(1891.2, 1894.2, 1892.5, 1894.04),
+           xmax=c(1898.8, 1896.2, 1897.5, 1896.2),
+           ymin=c(2.51, 2.41, 2.29, 2.17)*1e6,
+           ymax=c(2.63, 2.51, 2.41, 2.32)*1e6,
+           fill = "#EAE1D6") +
+  annotate('text', x = 1895, y=2400000, label="DISENFRANCHISMENT\nAND\nPROSCRIPTIVE\nLAWS", size=2, color="#131211") +
+  annotate('rect', xmin=1880.1, xmax=1882.7, ymin=4.11*1e6, ymax=4.19*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1880, y=4200000, label="RISE OF", size=2, hjust=0, vjust=1.1, color="#131211") +
+  annotate('rect', xmin=1882.1, xmax=1884.7, ymin=4.01*1e6, ymax=4.09*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1882, y=4100000, label="THE NEW", size=2, hjust=0, vjust=1.1, color="#131211") +
+  annotate('rect', xmin=1884.1, xmax=1889.9, ymin=3.91*1e6, ymax=3.99*1e6, fill = "#EAE1D6") +
+  annotate('text', x = 1884, y=4000000, label="INDUSTRIALISM", size=2, hjust=0, vjust=1.1, color="#131211") +
+  annotate('text', x = rep(1863, 10), y=c(.4, .6, 1.4, 1.6, 2.4, 2.6, 3.4, 3.6, 4.4, 4.6)*1e6, label="$", size=2,  color="#131211") +
+  annotate('text', x = 1863, y=4.85*1e6, label='DOLLARS', size=2, color="#131211")
+
+
+ggsave('20220215_06.png', width=5.1, height=5.5, unit='in')
+```
+
+
+
+```{r}
+
+```
+
+
+```{r}
+
+```
+
