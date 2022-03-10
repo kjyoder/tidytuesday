@@ -1,0 +1,117 @@
+---
+title: "TidyTuesday 2022-03-08"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+require(tidyverse)
+require(maps)
+require(sf)
+require(rnaturalearth)
+require(rnaturalearthdata)
+require(countrycode)
+
+#erasmus <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-08/erasmus.csv')
+erasmus <- read_csv('erasmus.csv')
+```
+
+```{r}
+erasmus %>%
+  glimpse()
+```
+
+```{r}
+erasmus %>% count(academic_year)
+```
+
+```{r build_countrycode_lookup}
+# extract country codes and convert to ios2c standard
+country_codes <- union(erasmus$sending_country_code, erasmus$receiving_country_code)
+country_codes <- str_replace_all(country_codes, c("UK"="GB", "EL"="GR"))
+
+country_code_lookup <- tibble(
+  country_code = country_codes,
+  country_name = countrycode(
+    country_codes,
+    origin = 'iso2c',
+    destination = 'country.name'
+  )
+) %>%
+  mutate(country_code = str_replace_all(country_code, c('GB'='UK', 'GR'='EL')),
+         country_name = replace_na(country_name, 'Kosovo'), # missing match
+         country_name = str_replace(country_name, 'UK', 'United Kingdom'))
+```
+
+
+```{r calculate_import}
+part_year <- erasmus %>%
+  group_by(academic_year) %>%
+  summarize(Total = sum(participants)) %>%
+  select(academic_year, Total)
+
+erasmus <- erasmus %>%
+  left_join(part_year, by='academic_year')
+
+rec <- erasmus %>%
+  rename(country = receiving_country_code) %>% 
+  group_by(academic_year, country) %>%
+  summarize(Received = sum(participants)) %>%
+  ungroup()
+send <- erasmus %>%
+  rename(country = sending_country_code) %>%
+  group_by(academic_year, country) %>%
+  summarize(Sent = sum(participants)) %>%
+  ungroup()
+
+import <- send %>%
+  left_join(rec, by=c('academic_year', 'country')) %>%
+  left_join(part_year, by='academic_year') %>%
+  mutate(Import = case_when(
+    is.na(Sent) & is.na(Received) ~ NA_real_,
+    is.na(Sent) ~ Received/Total,
+    is.na(Received) ~ -Sent/Total,
+    TRUE ~ (Received - Sent)/Total
+  )) %>%
+  inner_join(country_code_lookup, by=c('country'='country_code')) %>%
+  select(country, country_name, academic_year, Import, Sent, Received)
+               
+import %>%
+  arrange(desc(Import)) %>%
+  head(10)
+```
+
+```{r prep_map}
+world_map <- ne_countries(scale = 'medium', returnclass = 'sf')
+europe_map <- world_map %>% 
+  filter(continent == "Europe") %>%
+  mutate(name = str_replace(name, 'Czech Rep.', 'Czechia'),
+         name = str_replace(name, 'Bosnia and Herz.', 'Bosnia & Herzegovina'),
+         name = str_replace(name, 'Macedonia', 'North Macedonia'))
+
+ggplot() +
+  geom_sf(data=europe_map) +
+  coord_sf(xlim = c(-25, 50), ylim = c(35, 70), expand=FALSE)
+```
+
+
+```{r}
+import_map <- europe_map %>%
+  left_join(import, by=c('name' = 'country_name')) %>%
+  filter(! is.na(academic_year))
+
+ggplot() +
+  geom_sf(data=import_map, aes(fill=Import), lwd=.15, color='black') +
+  coord_sf(xlim = c(-25, 50), ylim = c(35, 72), expand=FALSE) +
+  facet_wrap(~academic_year) +
+  theme_void() +
+  scale_fill_viridis_c() +
+  labs(fill = "% received",
+       title = "Net Erasmus+ exchanges in Europe",
+       subtitle = "France is a favored destination every year\n",
+       caption = "\nData: Data.Europa | Plot: @drkeithyoder | #TidyTuesday")
+
+ggsave('20220308.png', width=6.5, height=4, unit='in', bg='white')
+```
+
