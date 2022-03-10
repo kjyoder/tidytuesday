@@ -13,8 +13,7 @@ require(rnaturalearth)
 require(rnaturalearthdata)
 require(countrycode)
 
-#erasmus <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-08/erasmus.csv')
-erasmus <- read_csv('erasmus.csv')
+erasmus <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-08/erasmus.csv')
 ```
 
 ```{r}
@@ -89,14 +88,9 @@ europe_map <- world_map %>%
   mutate(name = str_replace(name, 'Czech Rep.', 'Czechia'),
          name = str_replace(name, 'Bosnia and Herz.', 'Bosnia & Herzegovina'),
          name = str_replace(name, 'Macedonia', 'North Macedonia'))
-
-ggplot() +
-  geom_sf(data=europe_map) +
-  coord_sf(xlim = c(-25, 50), ylim = c(35, 70), expand=FALSE)
 ```
 
-
-```{r}
+```{r plot_import_pct}
 import_map <- europe_map %>%
   left_join(import, by=c('name' = 'country_name')) %>%
   filter(! is.na(academic_year))
@@ -110,7 +104,8 @@ ggplot() +
   labs(fill = "% received",
        title = "Net Erasmus+ exchanges in Europe",
        subtitle = "France is a favored destination every year\n",
-       caption = "\nData: Data.Europa | Plot: @drkeithyoder | #TidyTuesday")
+       caption = "\nData: Data.Europa | Plot: @drkeithyoder | #TidyTuesday") +
+  theme(plot.title = element_text(size=16))
 
 ggsave('20220308.png', width=6.5, height=4, unit='in', bg='white')
 ```
