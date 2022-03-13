@@ -5,7 +5,7 @@ output:
     df_print: paged
 ---
 
-```{r}
+```{r setup}
 require(tidyverse)
 require(maps)
 require(sf)
@@ -16,12 +16,12 @@ require(countrycode)
 erasmus <- read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-08/erasmus.csv')
 ```
 
-```{r}
+```{r glimpse}
 erasmus %>%
   glimpse()
 ```
 
-```{r}
+```{r n_per_year}
 erasmus %>% count(academic_year)
 ```
 
