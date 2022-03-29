@@ -100,12 +100,13 @@ ggplot() +
   coord_sf(xlim = c(-25, 50), ylim = c(35, 72), expand=FALSE) +
   facet_wrap(~academic_year) +
   theme_void() +
-  scale_fill_viridis_c() +
+  scale_fill_viridis_c(option = 'viridis') +
   labs(fill = "% received",
        title = "Net Erasmus+ exchanges in Europe",
        subtitle = "France is a favored destination every year\n",
        caption = "\nData: Data.Europa | Plot: @drkeithyoder | #TidyTuesday") +
-  theme(plot.title = element_text(size=16))
+  theme(plot.title = element_text(size=16),
+        panel.background = element_rect(colour = "black"))
 
 ggsave('20220308.png', width=6.5, height=4, unit='in', bg='white')
 ```

@@ -1,0 +1,187 @@
+---
+title: "R Notebook"
+output: html_notebook
+author: Keith J. Yoder (@drkeithyoder)
+---
+
+```{r setup}
+require(tidyverse)
+require(lubridate)
+require(spiralize)
+require(zoo)
+require(ComplexHeatmap)
+```
+
+```{r import_data}
+bioc <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-15/bioc.csv')
+cran <- readr::read_csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2022/2022-03-15/cran.csv')
+```
+
+```{r convert_dates}
+bioc %>% mutate(date = lubridate::as_datetime(date))
+
+# usable dates
+c0 <- cran %>% 
+  mutate(d = lubridate::as_datetime(date)) %>%
+  filter(!is.na(d))
+# dates with 2-digit months
+c1 <- cran %>% 
+  mutate(d = lubridate::as_datetime(date)) %>%
+  filter(is.na(d))
+c1 <- c1 %>%
+  mutate(d_str = str_sub(date, 5)) %>%
+  mutate(d_mm = match(str_sub(d_str,1,3), month.abb),
+         d_dd = str_sub(d_str, 5, 6),
+         d_yyyy = str_sub(d_str,17),
+         d_t = str_sub(d_str, 8,15)
+  ) %>%
+  unite(ymd, d_yyyy, d_mm, d_dd, sep="-") %>%
+  unite(newdate, ymd, d_t, sep=" ") %>%
+  mutate(d2 = lubridate::as_datetime(newdate)) %>%
+  mutate(d = case_when(
+    !is.na(d) ~ d,
+    TRUE ~ d2
+  ))
+# dates with 1-digit months
+c2 <- c1 %>%
+  filter(is.na(d)) %>%
+  mutate(d_str = str_sub(date, 5)) %>%
+  mutate(d_mm = match(str_sub(d_str,1,3), month.abb),
+         d_dd = str_sub(d_str, 5, 5),
+         d_yyyy = str_sub(d_str,16),
+         d_t = str_sub(d_str, 7,14)
+  ) %>%
+  unite(ymd, d_yyyy, d_mm, d_dd, sep="-") %>%
+  unite(newdate, ymd, d_t, sep=" ") %>%
+  mutate(d2 = lubridate::as_datetime(newdate)) %>%
+  mutate(d = case_when(
+    !is.na(d) ~ d,
+    TRUE ~ d2
+  ))
+# replace `date` col with lubridated `d` and bind all
+cran <- bind_rows(c0 %>% mutate(date = d),
+                  c1 %>% mutate(date = d) %>% 
+                    select(package, version, date, rnw, rmd),
+                  c2 %>% mutate(date = d) %>% 
+                    select(package, version, date, rnw, rmd))
+```
+
+```{r tidy_counts}
+# add sources
+bioc$source <- 'Bioconductor'
+cran$source <- 'CRAN'
+
+# bind both after tidying columns
+d <- bind_rows(
+  bioc %>% select(date, rnw, rmd, package),
+  cran %>% select(date, rnw, rmd, package)
+) %>%
+  filter(date > lubridate::as_datetime("2001-01-01 01:01:01") &
+           date < lubridate::as_datetime("2022-03-15 01:01:01")) %>% 
+  arrange(date) %>%
+  mutate(Year = year(date),
+         Month = month(date),
+         Day = day(date))
+
+counts <- d %>%
+  filter(Year > 2011) %>%
+  group_by(Day, Month, Year) %>%
+  summarize(rnw = sum(rnw),
+            rmd = sum(rmd)) %>%
+  ungroup() %>%
+  ungroup() %>%
+  arrange(Year, Month, Day) %>% 
+  select(Day, Month, Year, rnw, rmd) %>%
+  mutate(date = lubridate::as_date(str_c(Year,'-',Month,'-',Day))) %>%
+  mutate(roll_rnw = rollmean(rnw, 7, na.pad=TRUE, align='right'),
+         roll_rmd = rollmean(rmd, 7, na.pad=TRUE, align='right'))
+
+```
+
+```{r spiralize_plot}
+#https://github.com/jokergoo/spiralize
+#https://jokergoo.github.io/spiralize_vignettes/spiralize.html
+png('20220815.png', width=7, height=5, units = 'in', res=300)
+
+# Use base::grid to layout the plot
+grid.newpage()
+
+# Create a viewport with 3 rows
+top.vp <-
+  viewport(layout = grid.layout(3, 1,
+                                heights=unit(c(4, 1, 2), c('lines', 'null', 'lines'))))
+titlevp <- viewport(layout.pos.col=1, layout.pos.row=1, name='titlevp')
+plotvp <- viewport(layout.pos.col=1, layout.pos.row=2, name='plotvp')
+capvp <- viewport(layout.pos.col=1, layout.pos.row=3, name='capvp')
+splot <- vpTree(top.vp, vpList(titlevp, plotvp, capvp))
+pushViewport(splot)
+                   
+# Add the title and subtitle               
+seekViewport('titlevp')
+grid.text("Seasonal vignettes", 
+          x=unit(0.15, 'npc'), y = unit(1, 'npc') - unit(.9, 'lines'),
+          gp = gpar(fontsize=14, fontface='bold'))
+grid.text("RMarkdown is more popular than Sweave.", 
+          x=unit(0.25, 'npc'), y = unit(1, 'npc') - unit(2, 'lines'),
+          gp = gpar(fontsize=12))
+grid.text("7-day rolling averages show developers tend to release vignettes in Spring and Fall", 
+          x=unit(0.465, 'npc'), y = unit(1, 'npc') - unit(3, 'lines'),
+          gp = gpar(fontsize=12))
+
+# Add the spiral plot
+seekViewport('plotvp')
+spiral_initialize_by_time(xlim = c("2012-01-01", "2022-03-15"), 
+                          unit_on_axis = 'day', period='years',
+                         clockwise=TRUE, normalize_year = TRUE,
+                         start = 90, newpage = FALSE)
+
+spiral_track(ylim=c(0, max(counts$roll_rmd, na.rm=TRUE)*.7), background=FALSE,
+             height=.5)
+spiral_track(ylim=c(0, max(counts$roll_rmd, na.rm=TRUE)*.7), background=FALSE,
+             height=.5)
+
+spiral_polygon(x=c(counts$date, rev(counts$date)),
+               y=c(counts$roll_rnw/1.5, -rev(counts$roll_rnw)/1.5),
+               gp = gpar(col="#d32e2b", fill="#d32e2b30"))
+spiral_polygon(x=c(counts$date, rev(counts$date)),
+               y=c(counts$roll_rmd/1.5, -rev(counts$roll_rmd)/1.5),
+               gp = gpar(col="#2222cc", fill="#2222cc30"))
+
+## Add month labels
+s = current_spiral()
+d = (seq(15, 360, by = 30) + 60) %% 360
+for(i in seq_along((d))) {
+  if (i == 1) {
+    foo = polar_to_cartesian(d[i]/180*pi, (s$max_radius + 1)*1.01)
+    grid.text(month.name[i], x = foo[1, 1], y = foo[1, 2], default.unit = "native",
+        rot = ifelse(d[i] > 0 & d[i] < 180, d[i] - 90, d[i] + 90), gp = gpar(fontsize = 10))
+  } else {
+    foo = polar_to_cartesian(d[i]/180*pi, (s$max_radius + 1)*1.01)
+    grid.text(month.name[14-i], x = foo[1, 1], y = foo[1, 2], default.unit = "native",
+        rot = ifelse(d[i] > 0 & d[i] < 180, d[i] - 90, d[i] + 90), gp = gpar(fontsize = 10))
+  }
+    
+}
+
+## Add year labels
+spiral_text(as_date(str_c(2011:2021, '-07-1')),
+            .1, c(2011:2021), facing='downward',
+            gp = gpar(fontsize=8, col='#333333'), vjust=1.5)
+
+## Add legend   
+lgd = packLegend(
+  Legend(title = "Format", type = "boxplot",
+         legend_gp = gpar(col = c("#d32e2b", "#2222cc")),
+         at = c('Sweave', 'RMarkdown'))
+)
+draw(lgd, x = unit(1, 'npc') + unit(5, 'mm'), just='left') 
+
+# Add caption
+seekViewport('capvp')
+grid.text('Data: @rmflight | Graphic: @drkeithyoder | #tidytuesday',
+          x = unit(.77, 'npc'),
+          gp = gpar(fontsize=8) )
+
+upViewport(0)
+dev.off()
+```
